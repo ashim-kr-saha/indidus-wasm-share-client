@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indidus Share Client</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #121212; color: white; }
+        .container { background: #1e1e1e; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: center; }
+        button { background: #6200ee; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+        button:disabled { background: #333; cursor: not-allowed; }
+        #status { margin-top: 1rem; color: #bb86fc; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Indidus Secure Share</h1>
+        <p>This share is end-to-end encrypted. Decryption happens entirely in your browser.</p>
+        <button id="downloadBtn">Download & Decrypt</button>
+        <div id="status"></div>
+    </div>
+
+    <script type="module">
+        import init, { download_and_decrypt } from './pkg/indidus_wasm_share_client.js';
+
+        async function run() {
+            await init();
+
+            const downloadBtn = document.getElementById('downloadBtn');
+            const status = document.getElementById('status');
+
+            // Parse URL: https://relay.indidus.app/share/ID#key=HEXKEY
+            const urlParams = new URLSearchParams(window.location.hash.substring(1));
+            const key = urlParams.get('key');
+            const shareId = window.location.pathname.split('/').pop();
+            const relayUrl = `${window.location.origin}/shares/${shareId}`;
+
+            if (!key || !shareId) {
+                status.innerText = 'Error: Invalid share link.';
+                downloadBtn.disabled = true;
+                return;
+            }
+
+            downloadBtn.addEventListener('click', async () => {
+                status.innerText = 'Decrypting...';
+                try {
+                    await download_and_decrypt(relayUrl, key);
+                    status.innerText = 'Success! Check your downloads.';
+                } catch (e) {
+                    status.innerText = `Error: ${e}`;
+                    console.error(e);
+                }
+            });
+        }
+
+        run();
+    </script>
+</body>
+</html>
