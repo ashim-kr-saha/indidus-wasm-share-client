@@ -1,17 +1,21 @@
+use aes_gcm::{
+    Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
+};
+use argon2::{
+    Argon2, Params,
+    password_hash::{PasswordHasher, SaltString},
+};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
-use argon2::{
-    password_hash::{PasswordHasher, SaltString},
-    Argon2, Params,
-};
 
 #[wasm_bindgen]
-pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>) -> Result<(), JsValue> {
+pub async fn download_and_decrypt(
+    url: &str,
+    key_hex: &str,
+    pin: Option<String>,
+) -> Result<(), JsValue> {
     // 1. Download encrypted blob
     let mut opts = RequestInit::new();
     opts.method("GET");
@@ -20,7 +24,9 @@ pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>)
     let request = Request::new_with_str_and_init(url, &opts)?;
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("No window found"))?;
     let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
-    let resp: Response = resp_value.dyn_into().map_err(|_| JsValue::from_str("Failed to cast to Response"))?;
+    let resp: Response = resp_value
+        .dyn_into()
+        .map_err(|_| JsValue::from_str("Failed to cast to Response"))?;
 
     if !resp.ok() {
         return Err(JsValue::from_str("Failed to download share"));
@@ -31,23 +37,28 @@ pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>)
 
     // 2. Decrypt
     let mut key_bytes = hex::decode(key_hex).map_err(|_| JsValue::from_str("Invalid key hex"))?;
-    
+
     if let Some(pin_str) = pin {
         // Derive key using Argon2id (as per PRD 10.2)
         // We use the key from the URL as salt to make the PIN derivation unique per share
         let salt = SaltString::encode_b64(key_hex.as_bytes())
             .map_err(|_| JsValue::from_str("Salt encoding failed"))?;
-            
+
         let argon2 = Argon2::new(
             argon2::Algorithm::Argon2id,
             argon2::Version::V0x13,
             Params::new(65536, 3, 1, Some(32)).unwrap(), // 64MB, 3 iterations, 1 parallel
         );
-        
-        let hash = argon2.hash_password(pin_str.as_bytes(), &salt)
+
+        let hash = argon2
+            .hash_password(pin_str.as_bytes(), &salt)
             .map_err(|_| JsValue::from_str("PIN derivation failed"))?;
-            
-        key_bytes = hash.hash.ok_or_else(|| JsValue::from_str("Hash extraction failed"))?.as_ref().to_vec();
+
+        key_bytes = hash
+            .hash
+            .ok_or_else(|| JsValue::from_str("Hash extraction failed"))?
+            .as_ref()
+            .to_vec();
     }
 
     let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
@@ -60,7 +71,8 @@ pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>)
     let (nonce_bytes, ciphertext) = bytes.split_at(12);
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    let decrypted = cipher.decrypt(nonce, ciphertext)
+    let decrypted = cipher
+        .decrypt(nonce, ciphertext)
         .map_err(|_| JsValue::from_str("Decryption failed"))?;
 
     // 3. Trigger Download
@@ -71,9 +83,9 @@ pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>)
     let mut ack_opts = RequestInit::new();
     ack_opts.method("POST");
     ack_opts.mode(RequestMode::Cors);
-    
+
     let ack_request = Request::new_with_str_and_init(&ack_url, &ack_opts)?;
-    // We don't necessarily need to await this if we want to be fast, 
+    // We don't necessarily need to await this if we want to be fast,
     // but the PRD says "confirm confirmation".
     let _ = JsFuture::from(window.fetch_with_request(&ack_request)).await;
 
@@ -82,23 +94,27 @@ pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>)
 
 fn trigger_download(data: &[u8], filename: &str) -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("No window found"))?;
-    let document = window.document().ok_or_else(|| JsValue::from_str("No document found"))?;
-    
+    let document = window
+        .document()
+        .ok_or_else(|| JsValue::from_str("No document found"))?;
+
     let blob_parts = js_sys::Array::new();
     blob_parts.push(&js_sys::Uint8Array::from(data));
-    
+
     let blob = web_sys::Blob::new_with_u8_array_sequence(&blob_parts)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob)?;
-    
-    let a = document.create_element("a")?.dyn_into::<web_sys::HtmlElement>()?;
+
+    let a = document
+        .create_element("a")?
+        .dyn_into::<web_sys::HtmlElement>()?;
     a.set_attribute("href", &url)?;
     a.set_attribute("download", filename)?;
     a.click();
-    
+
     // We should probably delay revocation or use a different mechanism,
     // but for simple cases this might work if click() is synchronous.
     // However, it's safer to revoke later.
     // web_sys::Url::revoke_object_url(&url)?;
-    
+
     Ok(())
 }
