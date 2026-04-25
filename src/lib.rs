@@ -47,7 +47,7 @@ pub async fn download_and_decrypt(url: &str, key_hex: &str, pin: Option<String>)
         let hash = argon2.hash_password(pin_str.as_bytes(), &salt)
             .map_err(|_| JsValue::from_str("PIN derivation failed"))?;
             
-        key_bytes = hash.hash().ok_or_else(|| JsValue::from_str("Hash extraction failed"))?.as_ref().to_vec();
+        key_bytes = hash.hash.ok_or_else(|| JsValue::from_str("Hash extraction failed"))?.as_ref().to_vec();
     }
 
     let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
