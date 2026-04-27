@@ -22,7 +22,3 @@ argon2 = "0.5"
 getrandom = { version = "0.2", features = ["js"] }
 base64 = "0.22"
 hex = "0.4"
-
-[profile.release]
-opt-level = "s"
-lto = true
