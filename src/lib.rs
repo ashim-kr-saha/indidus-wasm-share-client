@@ -17,9 +17,9 @@ pub async fn download_and_decrypt(
     pin: Option<String>,
 ) -> Result<(), JsValue> {
     // 1. Download encrypted blob
-    let mut opts = RequestInit::new();
-    opts.method("GET");
-    opts.mode(RequestMode::Cors);
+    let opts = RequestInit::new();
+    opts.set_method("GET");
+    opts.set_mode(RequestMode::Cors);
 
     let request = Request::new_with_str_and_init(url, &opts)?;
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("No window found"))?;
@@ -80,9 +80,9 @@ pub async fn download_and_decrypt(
 
     // 4. Acknowledge (Burn-after-reading as per PRD 10.3)
     let ack_url = format!("{}/acknowledge", url);
-    let mut ack_opts = RequestInit::new();
-    ack_opts.method("POST");
-    ack_opts.mode(RequestMode::Cors);
+    let ack_opts = RequestInit::new();
+    ack_opts.set_method("POST");
+    ack_opts.set_mode(RequestMode::Cors);
 
     let ack_request = Request::new_with_str_and_init(&ack_url, &ack_opts)?;
     // We don't necessarily need to await this if we want to be fast,
